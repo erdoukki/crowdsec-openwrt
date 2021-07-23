@@ -1,0 +1,15 @@
+diff --git a/Makefile b/Makefile
+index d78a46a..fe52aab 100644
+--- a/Makefile
++++ b/Makefile
+@@ -19,7 +19,8 @@ CROWDSEC_BIN = "crowdsec"
+ CSCLI_BIN = "cscli"
+ BUILD_CMD = "build"
+ 
+-GOARCH=amd64
++GOOS ?= linux
++GOARCH ?= amd64
+ 
+ #Golang version info
+ GO_MAJOR_VERSION = $(shell go version | cut -c 14- | cut -d' ' -f1 | cut -d'.' -f1)
+
