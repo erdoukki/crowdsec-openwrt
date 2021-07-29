@@ -1,18 +1,32 @@
 #!/bin/sh /etc/rc.common
-# (C) 2013 openwrt.org
+# (C) 2021 Gerald Kerma
 
 START=99
 USE_PROCD=1
 NAME=crowdsec-firewall-bouncer
 PROG=/usr/bin/crowdsec-firewall-bouncer
 CONFIG=/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+BACKEND=iptables
+
+service_triggers() {
+        procd_add_reload_trigger crowdsec-firewall-bouncer
+}
 
 boot()
 {
 	rc_procd start_service
 }
 
+init_config() {
+	config_load crowdsec
+	config_get data_dir crowdsec backend "${BACKEND}"
+	
+        sed -i "s,^\(\s*mode\s*:\s*\).*\$,\1$BACKEND," $CONFIG
+}
+
 start_service() {
+	init_config
+	
 	procd_open_instance
 	procd_set_param command "$PROG" -c "$CONFIG"
 	procd_close_instance

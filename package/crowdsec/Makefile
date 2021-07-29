@@ -21,11 +21,12 @@ PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=Gerald Kerma <gandalf@gk2.net>
 
-PKG_BUILD_DEPENDS:=golang/host
+PKG_BUILD_DEPENDS:=golang/host jq/host
 PKG_BUILD_PARALLEL:=1
 PKG_USE_MIPS16:=0
 
 GO_PKG:=github.com/crowdsecurity/crowdsec
+GO_PKG_BUILD_PKG:=github.com/crowdsecurity/crowdsec
 
 include $(INCLUDE_DIR)/package.mk
 #include ../../lang/golang/golang-package.mk
@@ -34,10 +35,8 @@ include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
 define Package/crowdsec/Default
   TITLE:=CrowdSec is a free, modern & collaborative behavior detection engine
   URL:=https://github.com/crowdsecurity/crowdsec/
-  DEPENDS:=$(GO_ARCH_DEPENDS)
-  HOST_DEPENDS:=jq
-  PKG_CONFIG_DEPENDS:= \
-  	@CONFIG_EXTRA_BINUTILS_CONFIG_OPTIONS="--enable-gold --enable-plugins"
+  DEPENDS:=$(GO_ARCH_DEPENDS) \
+  	+jq
 endef
 
 define Package/crowdsec
@@ -63,22 +62,25 @@ endef
 define Package/crowdsec/description
 $(call Package/crowdsec/Default/description)
 
-This package contains the main program.
+  This package contains the main program.
 endef
 
 define Package/golang-crowdsec-dev/description
 $(call Package/crowdsec/Default/description)
 
-This package provides the source files for the program.
+  This package provides the source files for the program.
 endef
 
+#--debug basic, verbose, implicit, jobs, all, or makefile.
+PKG_JOBS += static --debug=basic
+GOARCH=$(GO_ARCH)
+GO_PKG_BUILD_VARS += GO111MODULE=auto
 GO_PKG_INSTALL_ALL:=1
-MAKE_VARS += $(GO_PKG_VARS) BUILD_VERSION=v$(PKG_VERSION)
-MAKE_FLAGS += release --debug
+MAKE_VARS += $(GO_PKG_VARS)
+MAKE_FLAGS += BUILD_VERSION=v$(PKG_VERSION)
 
 define Build/Compile
 	+$(MAKE_VARS) \
-	$(GO_PKG_VARS) \
 	$(MAKE) $(PKG_JOBS) -C $(GO_PKG_BUILD_DIR)/src/$(GO_PKG) \
 		$(MAKE_FLAGS)
 endef
@@ -96,32 +98,32 @@ define Package/crowdsec/install
 	$(INSTALL_DIR) $(1)/etc/crowdsec/hub
 	
 	$(INSTALL_DATA) \
-		$(GO_PKG_BUILD_DIR)/src/$(GO_PKG)/config/config.yaml \
+		$(PKG_BUILD_DIR)/config/config.yaml \
 		$(1)/etc/crowdsec
 	$(INSTALL_DATA) \
-		$(GO_PKG_BUILD_DIR)/src/$(GO_PKG)/config/dev.yaml \
+		$(PKG_BUILD_DIR)/config/dev.yaml \
 		$(1)/etc/crowdsec
 	$(INSTALL_DATA) \
-		$(GO_PKG_BUILD_DIR)/src/$(GO_PKG)/config/user.yaml \
+		$(PKG_BUILD_DIR)/config/user.yaml \
 		$(1)/etc/crowdsec
 	$(INSTALL_DATA) \
-		$(GO_PKG_BUILD_DIR)/src/$(GO_PKG)/config/acquis.yaml \
+		$(PKG_BUILD_DIR)/config/acquis.yaml \
 		$(1)/etc/crowdsec
 	$(INSTALL_DATA) \
-		$(GO_PKG_BUILD_DIR)/src/$(GO_PKG)/config/profiles.yaml \
+		$(PKG_BUILD_DIR)/config/profiles.yaml \
 		$(1)/etc/crowdsec
 	$(INSTALL_DATA) \
-		$(GO_PKG_BUILD_DIR)/src/$(GO_PKG)/config/simulation.yaml \
+		$(PKG_BUILD_DIR)/config/simulation.yaml \
 		$(1)/etc/crowdsec
 	$(INSTALL_DATA) \
-		$(GO_PKG_BUILD_DIR)/src/$(GO_PKG)/config/local_api_credentials.yaml \
+		$(PKG_BUILD_DIR)/config/local_api_credentials.yaml \
 		$(1)/etc/crowdsec
 	$(INSTALL_DATA) \
-		$(GO_PKG_BUILD_DIR)/src/$(GO_PKG)/config/online_api_credentials.yaml \
+		$(PKG_BUILD_DIR)/config/online_api_credentials.yaml \
 		$(1)/etc/crowdsec
 
 	$(CP) \
-		$(GO_PKG_BUILD_DIR)/src/$(GO_PKG)/config/patterns/* \
+		$(PKG_BUILD_DIR)/config/patterns/* \
 		$(1)/etc/crowdsec/patterns
 
 	$(INSTALL_DIR) $(1)/srv/crowdsec/data/
@@ -130,11 +132,17 @@ define Package/crowdsec/install
 	$(INSTALL_BIN) \
 		./files/crowdsec.initd \
 		$(1)/etc/init.d/crowdsec
+		
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) \
+		./files/crowdsec.config \
+		$(1)/etc/config/crowdsec
 endef
 
 define Package/crowdsec/postinst
 #!/bin/sh
 if [ -z "$${IPKG_INSTROOT}" ]; then
+  /etc/init.d/crowdsec enable
   /etc/init.d/crowdsec restart
   cscli -c /etc/crowdsec/config.yaml machines add --auto
   cscli -c /etc/crowdsec/config.yaml capi register
@@ -148,9 +156,17 @@ define Package/crowdsec/prerm
 #!/bin/sh
 if [ -z "$${IPKG_INSTROOT}" ]; then
   /etc/init.d/crowdsec stop
+  /etc/init.d/crowdsec disable
   rm -f /usr/bin/crowdsec
   rm -f /usr/bin/cscli
+  rm -f /etc/init.d/crowdsec
 fi
+endef
+
+define Package/crowdsec/conffiles
+  /etc/crowdsec/config/config.yaml
+  /etc/crowdsec/config/local_api_credentials.yaml
+  /etc/config/crowdsec
 endef
 
 $(eval $(call GoBinPackage,crowdsec))
