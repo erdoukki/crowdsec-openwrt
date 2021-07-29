@@ -4,39 +4,71 @@
 START=99
 USE_PROCD=1
 NAME=crowdsec-firewall-bouncer
-PROG=/usr/bin/crowdsec-firewall-bouncer
+PROG=/usr/bin/cs-firewall-bouncer
 CONFIG=/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
 BACKEND=iptables
+VARCONFIGDIR=/var/etc/crowdsec/bouncers
+VARCONFIG=/var/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+FW_BACKEND="iptables"
 
 service_triggers() {
-        procd_add_reload_trigger crowdsec-firewall-bouncer
-}
-
-boot()
-{
-	rc_procd start_service
+	procd_add_reload_trigger crowdsec-firewall-bouncer
 }
 
 init_config() {
 	config_load crowdsec
-	config_get data_dir crowdsec backend "${BACKEND}"
-	
-        sed -i "s,^\(\s*mode\s*:\s*\).*\$,\1$BACKEND," $CONFIG
+	config_get BACKEND crowdsec backend "${BACKEND}"
+
+	if [ "$BACKEND" = "auto" ]; then 
+		## CheckFirewall
+		iptables="true"
+		which iptables > /dev/null
+		FW_BACKEND=""
+		if [[ $? != 0 ]]; then
+		  echo "iptables is not present"
+		  iptables="false"
+		else
+		  FW_BACKEND="iptables"
+		  echo "iptables found"
+		fi
+
+		nftables="true"
+		which nft > /dev/null
+		if [[ $? != 0 ]]; then
+		  echo "nftables is not present"
+		  nftables="false"
+		else
+		  FW_BACKEND="nftables"
+		  echo "nftables found"
+		fi
+
+		if [ "$nftables" = "true" -a "$iptables" = "true" ]; then
+		  echo "Found nftables(default) and iptables..."
+		fi
+
+		if [ "$FW_BACKEND" = "iptables" ]; then
+		  which ipset > /dev/null
+		  if [[ $? != 0 ]]; then
+		    echo "ipset not found, install it !"
+		  fi
+		fi
+		BACKEND=$FW_BACKEND
+	fi
+
+	# Create tmp dir & permissions if needed
+	if [ ! -d "${VARCONFIGDIR}" ]; then
+		mkdir -m 0755 -p "${VARCONFIGDIR}"
+	fi;
+
+	cp $CONFIG $VARCONFIG
+
+	sed -i "s,^\(\s*mode\s*:\s*\).*\$,\1$BACKEND," $VARCONFIG
 }
 
 start_service() {
 	init_config
-	
+
 	procd_open_instance
-	procd_set_param command "$PROG" -c "$CONFIG"
+	procd_set_param command "$PROG" -c "$VARCONFIG"
 	procd_close_instance
-}
-
-reload_service() {
-	procd_send_signal $PROG
-}
-
-stop_service()
-{
-	rc_procd killall "$PROG"
 }

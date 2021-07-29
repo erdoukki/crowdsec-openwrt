@@ -1,0 +1,19 @@
+#!/bin/sh
+
+CONFIG=/etc/crowdsec/config.yaml
+data_dir=`uci get "crowdsec.crowdsec.data_dir"`
+sed -i "s,^\(\s*data_dir\s*:\s*\).*\$,\1$data_dir," $CONFIG
+db_path=`uci get "crowdsec.crowdsec.db_path"`
+sed -i "s,^\(\s*db_path\s*:\s*\).*\$,\1$db_path," $CONFIG
+
+# Create data dir & permissions if needed
+if [ ! -d "${data_dir}" ]; then
+	mkdir -m 0755 -p "${data_dir}"
+fi;
+
+cscli -c /etc/crowdsec/config.yaml machines add --auto
+cscli -c /etc/crowdsec/config.yaml capi register
+cscli hub update
+cscli parsers install "crowdsecurity/whitelists"
+
+exit 0

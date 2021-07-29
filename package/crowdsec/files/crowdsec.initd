@@ -7,24 +7,28 @@ NAME=crowdsec
 PROG=/usr/bin/crowdsec
 CONFIG=/etc/crowdsec/config.yaml
 RUNCONFDIR=/srv/crowdsec/data
+VARCONFIGDIR=/var/etc/crowdsec
+VARCONFIG=/var/etc/crowdsec/config.yaml
 
 service_triggers() {
-        procd_add_reload_trigger crowdsec
-}
-
-boot()
-{
-	rc_procd start_service
+	procd_add_reload_trigger crowdsec
 }
 
 init_config() {
 	config_load crowdsec
 	config_get data_dir crowdsec data_dir "${RUNCONFDIR}"
 	config_get db_path crowdsec db_path "${RUNCONFDIR}/crowdsec.db"
-	
-        sed -i "s,^\(\s*data_dir\s*:\s*\).*\$,\1$data_dir," $CONFIG
-        sed -i "s,^\(\s*db_path\s*:\s*\).*\$,\1$db_path," $CONFIG
-	
+
+	# Create tmp dir & permissions if needed
+	if [ ! -d "${VARCONFIGDIR}" ]; then
+		mkdir -m 0755 -p "${VARCONFIGDIR}"
+	fi;
+
+	cp $CONFIG $VARCONFIG
+
+	sed -i "s,^\(\s*data_dir\s*:\s*\).*\$,\1$data_dir," $VARCONFIG
+	sed -i "s,^\(\s*db_path\s*:\s*\).*\$,\1$db_path," $VARCONFIG
+
 	# Create data dir & permissions if needed
 	if [ ! -d "${RUNCONFDIR}" ]; then
 		mkdir -m 0755 -p "${RUNCONFDIR}"
@@ -33,18 +37,8 @@ init_config() {
 
 start_service() {
 	init_config
-	
+
 	procd_open_instance
-	procd_set_param command "$PROG" -c "$CONFIG"
+	procd_set_param command "$PROG" -c "$VARCONFIG"
 	procd_close_instance
 }
-
-reload_service() {
-	procd_send_signal $PROG
-}
-
-stop_service()
-{
-	rc_procd killall "$PROG"
-}
-

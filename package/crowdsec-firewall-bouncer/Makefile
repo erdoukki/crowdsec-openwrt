@@ -13,7 +13,7 @@ PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/crowdsecurity/cs-firewall-bouncer
-PKG_SOURCE_VERSION:=f302e9820077fee858ffe29b3adbd980d9c34107
+PKG_SOURCE_VERSION:=v$(PKG_VERSION)
 PKG_SOURCE_DATE:=20210705
 PKG_MIRROR_HASH:=7490a99288246bbc883384c47b441bb2f3867724a9f1a0e94d352fe36d47c220
 
@@ -21,34 +21,48 @@ PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=Gerald Kerma <gandalf@gk2.net>
 
-PKG_BUILD_DEPENDS:=golang/host jq/host
+PKG_BUILD_DEPENDS:=golang/host
 PKG_BUILD_PARALLEL:=1
 PKG_USE_MIPS16:=0
 
+CSFB_BUILD_VERSION?=$(PKG_SOURCE_VERSION)
+CSFB_BUILD_GOVERSION=$(shell go version | cut -d " " -f3 | sed -r 's/[go]+//g')
+CSFB_BUILD_TIMESTAMP=$(shell date +%F"_"%T)
+CSFB_BUILD_TAG=openwrt
+
+CSFB_VERSION_PKG:=github.com/crowdsecurity/cs-firewall-bouncer/pkg/version
+
 GO_PKG:=github.com/crowdsecurity/cs-firewall-bouncer
+
+GO_PKG_LDFLAGS_X:=$(CSFB_VERSION_PKG).Version=$(CSFB_BUILD_VERSION) \
+	$(CSFB_VERSION_PKG).BuildDate=$(CSFB_BUILD_TIMESTAMP) \
+	$(CSFB_VERSION_PKG).Tag=$(CSFB_BUILD_TAG) \
+	$(CSFB_VERSION_PKG).GoVersion=$(CSFB_BUILD_GOVERSION)
+
+GO_PKG_INSTALL_ALL:=1
 
 include $(INCLUDE_DIR)/package.mk
 #include ../../lang/golang/golang-package.mk
 include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
 
 define Package/crowdsec-firewall-bouncer/Default
-  TITLE:=Crowdsec bouncer written in golang for firewalls.
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=Firewall bouncer for Crowdsec.
   URL:=https://github.com/crowdsecurity/cs-firewall-bouncer/
-  DEPENDS:=$(GO_ARCH_DEPENDS) \
-  	+crowdsec \
-  	+jq
 endef
 
 define Package/crowdsec-firewall-bouncer
 $(call Package/crowdsec-firewall-bouncer/Default)
-  SECTION:=net
-  CATEGORY:=Network
+  DEPENDS:=$(GO_ARCH_DEPENDS) \
+  	+crowdsec
 endef
 
 define Package/golang-crowdsec-firewall-bouncer-dev
 $(call Package/crowdsec-firewall-bouncer/Default)
 $(call GoPackage/GoSubMenu)
   TITLE+= (source files)
+  DEPENDS:=$(GO_ARCH_DEPENDS)
   PKGARCH:=all
 endef
 
@@ -57,6 +71,8 @@ define Package/crowdsec-firewall-bouncer/Default/description
 
   crowdsec-firewall-bouncer will fetch new and old decisions
   from a CrowdSec API to add them in a blocklist used by supported firewalls.
+
+  You must install iptables+ipset or nftables.
 endef
 
 define Package/crowdsec-firewall-bouncer/description
@@ -71,27 +87,12 @@ $(call Package/crowdsec-firewall-bouncer/Default/description)
   This package provides the source files for the program.
 endef
 
-#--debug basic, verbose, implicit, jobs, all, or makefile.
-PKG_JOBS += static --debug=basic
-GOARCH=$(GO_ARCH)
-GO_PKG_BUILD_VARS += GO111MODULE=auto
-GO_PKG_INSTALL_ALL:=1
-MAKE_VARS += $(GO_PKG_VARS)
-MAKE_FLAGS += BUILD_VERSION=v$(PKG_VERSION)
-
-define Build/Compile
-	+$(MAKE_VARS) \
-	$(MAKE) $(PKG_JOBS) -C $(GO_PKG_BUILD_DIR)/src/$(GO_PKG) \
-		$(MAKE_FLAGS)
-endef
-
 define Package/crowdsec-firewall-bouncer/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(GO_PKG_BUILD_DIR)/src/$(GO_PKG)/crowdsec-firewall-bouncer $(1)/usr/bin/
+	$(call GoPackage/Package/Install/Bin,$(1))
 
 	$(INSTALL_DIR) $(1)/etc/crowdsec/bouncers
 	$(INSTALL_DATA) \
-		$(PKG_BUILD_DIR)/config/crowdsec-firewall-bouncer.yaml \
+		$(GO_PKG_BUILD_DIR)/src/$(GO_PKG)/config/crowdsec-firewall-bouncer.yaml \
 		$(1)/etc/crowdsec/bouncers
 
 	$(INSTALL_DIR) $(1)/etc/init.d
@@ -103,92 +104,15 @@ define Package/crowdsec-firewall-bouncer/install
 	$(INSTALL_BIN) \
 		./files/crowdsec-firewall-bouncer.firewall \
 		$(1)/etc/firewall.cs
+
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) \
+		./files/crowdsec-firewall-bouncer.defaults \
+		$(1)/etc/uci-defaults/99_crowdsec-firewall-bouncer
 endef
 
-define Package/crowdsec-firewall-bouncer/postinst
-#!/bin/sh
-if [ -z "$${IPKG_INSTROOT}" ]; then
-  # Default firewall backend is iptables instead of nftables
-  FW_BACKEND="iptables"
-  API_KEY=""
-
-  ## CheckFirewall
-  iptables="true"
-  which iptables > /dev/null
-  FW_BACKEND=""
-  if [[ $$? != 0 ]]; then 
-    echo "iptables is not present"
-    iptables="false"
-  else 
-    FW_BACKEND="iptables"
-    echo "iptables found"
-  fi
-
-  nftables="true"
-  which nft > /dev/null
-  if [[ $$? != 0 ]]; then 
-    echo "nftables is not present"
-    nftables="false"
-  else
-    FW_BACKEND="nftables" 
-    echo "nftables found"
-  fi
-
-  if [ "$$nftables" = "true" -a "$$iptables" = "true" ]; then
-    echo "Found nftables(default) and iptables..."
-  fi
-
-  if [ "$$FW_BACKEND" = "iptables" ]; then
-    which ipset > /dev/null
-    if [[ $$? != 0 ]]; then
-      echo "ipset not found, install it !"
-    fi
-  fi
-
-  if ! uci show crowdsec | grep -q api_key; then
-    ## Gen&ConfigApiKey
-    SUFFIX=`tr -dc A-Za-z0-9 </dev/urandom | head -c 8`
-    API_KEY=`/usr/bin/cscli bouncers add cs-firewall-bouncer-$${SUFFIX} -o raw`
-    sed -i "s,^\(\s*api_key\s*:\s*\).*\$$,\1$$API_KEY," /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
-    uci set "crowdsec.crowdsec.api_key=$$API_KEY"
-    echo -e "Adding the following UCI config:\n $$(uci changes)"
-    uci commit
-  fi
-  
-  ## ConfigBackend
-  sed -i "s,^\(\s*mode\s*:\s*\).*\$$,\1$$FW_BACKEND," /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
-  uci set "crowdsec.crowdsec.backend=$$FW_BACKEND"
-  echo -e "Adding the following UCI config:\n $$(uci changes)"
-  uci commit
-
-  # unfortunately, UCI doesn't provide a nice way to add an anonymous section only if it doesn't already exist
-  if ! uci show firewall | grep -q firewall.cs; then
-    name="$$(uci add firewall include)"
-    uci set "firewall.$${name}.path=/etc/firewall.cs"
-    uci set "firewall.$${name}.enabled=1"
-    uci set "firewall.$${name}.reload=1"
-    echo -e "Adding the following UCI config:\n $$(uci changes)"
-    uci commit
-  fi
-
-  ##
-  /etc/init.d/firewall restart
-fi
-endef
-
-define Package/crowdsec-firewall-bouncer/prerm
-#!/bin/sh
-if [ -z "$${IPKG_INSTROOT}" ]; then
-  /etc/init.d/crowdsec-firewall-bouncer stop
-  /etc/init.d/crowdsec-firewall-bouncer disable
-  rm -f /usr/bin/crowdsec-firewall-bouncer
-  rm -f /etc/firewall.cs
-  rm -f /etc/init.d/crowdsec-firewall-bouncer
-fi
-endef
-
-define Package/crowdsec/conffiles
-  /etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+define Package/crowdsec-firewall-bouncer/conffiles
+/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
 endef
 
 $(eval $(call GoBinPackage,crowdsec-firewall-bouncer))

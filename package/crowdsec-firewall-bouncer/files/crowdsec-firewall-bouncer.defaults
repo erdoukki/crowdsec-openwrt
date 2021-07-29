@@ -1,0 +1,67 @@
+#!/bin/sh
+
+# Default firewall backend is iptables instead of nftables
+FW_BACKEND="iptables"
+API_KEY=""
+CONFIG=/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml
+
+## CheckFirewall
+iptables="true"
+which iptables > /dev/null
+FW_BACKEND=""
+if [[ $? != 0 ]]; then
+  echo "iptables is not present"
+  iptables="false"
+else
+  FW_BACKEND="iptables"
+  echo "iptables found"
+fi
+
+nftables="true"
+which nft > /dev/null
+if [[ $? != 0 ]]; then
+  echo "nftables is not present"
+  nftables="false"
+else
+  FW_BACKEND="nftables"
+  echo "nftables found"
+fi
+
+if [ "$nftables" = "true" -a "$iptables" = "true" ]; then
+  echo "Found nftables(default) and iptables..."
+fi
+
+if [ "$FW_BACKEND" = "iptables" ]; then
+  which ipset > /dev/null
+  if [[ $? != 0 ]]; then
+    echo "ipset not found, install it !"
+  fi
+fi
+
+## ConfigBackend
+sed -i "s,^\(\s*mode\s*:\s*\).*\$,\1$FW_BACKEND," $CONFIG
+uci set "crowdsec.crowdsec.backend=$FW_BACKEND"
+echo -e "Adding the following UCI config:\n $(uci changes)"
+uci commit
+
+if ! uci show crowdsec | grep -q api_key; then
+  ## Gen&ConfigApiKey
+  SUFFIX=`tr -dc A-Za-z0-9 </dev/urandom | head -c 8`
+  API_KEY=`/usr/bin/cscli bouncers add cs-firewall-bouncer-${SUFFIX} -o raw`
+  sed -i "s,^\(\s*api_key\s*:\s*\).*\$,\1$API_KEY," $CONFIG
+  uci set "crowdsec.crowdsec.api_key=$API_KEY"
+  echo -e "Adding the following UCI config:\n $(uci changes)"
+  uci commit
+fi
+
+# unfortunately, UCI doesn't provide a nice way to add an anonymous section only if it doesn't already exist
+if ! uci show firewall | grep -q firewall.cs; then
+  name="$(uci add firewall include)"
+  uci set "firewall.${name}.path=/etc/firewall.cs"
+  uci set "firewall.${name}.enabled=1"
+  uci set "firewall.${name}.reload=1"
+  echo -e "Adding the following UCI config:\n $(uci changes)"
+  uci commit
+fi
+
+exit 0
