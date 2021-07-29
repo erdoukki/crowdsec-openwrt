@@ -1,5 +1,3 @@
-diff --git a/config/config.yaml b/config/config.yaml
-index 3f9777a..7bb75bd 100644
 --- a/config/config.yaml
 +++ b/config/config.yaml
 @@ -7,7 +7,7 @@ common:
@@ -20,4 +18,3 @@ index 3f9777a..7bb75bd 100644
    #user: 
    #password:
    #db_name:
-
