@@ -11,9 +11,8 @@ if [ ! -d "${data_dir}" ]; then
 	mkdir -m 0755 -p "${data_dir}"
 fi;
 
-cscli -c /etc/crowdsec/config.yaml machines add --auto
-cscli -c /etc/crowdsec/config.yaml capi register
-cscli hub update
-cscli parsers install "crowdsecurity/whitelists"
+cscli -c /etc/crowdsec/config.yaml machines add --force "$(cat /var/lib/dbus/machine-id)" -a -f /etc/crowdsec/local_api_credentials.yaml
+[ -s /etc/crowdsec/online_api_credentials.yaml ] || cscli -c /etc/crowdsec/config.yaml capi register -f /etc/crowdsec/online_api_credentials.yaml
+cscli hub update && cscli collections install crowdsecurity/linux && cscli parsers install crowdsecurity/whitelists
 
 exit 0

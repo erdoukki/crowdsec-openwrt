@@ -9,7 +9,7 @@
    simulation_path: /etc/crowdsec/simulation.yaml
    hub_dir: /etc/crowdsec/hub/
    index_path: /etc/crowdsec/hub/.index.json
-@@ -19,7 +19,7 @@ cscli:
+@@ -21,7 +21,7 @@ cscli:
  db_config:
    log_level: info
    type: sqlite

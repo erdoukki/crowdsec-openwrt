@@ -8,14 +8,14 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=crowdsec
-PKG_VERSION:=1.1.1
-PKG_RELEASE:=1
+PKG_VERSION:=1.2.0
+PKG_RELEASE:=$(AUTORELEASE)
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/crowdsecurity/crowdsec
 PKG_SOURCE_VERSION:=v$(PKG_VERSION)
-PKG_SOURCE_DATE:=20210707
-PKG_MIRROR_HASH:=940e6e122097468ad99fcee2db569afda94fc2a65837c74b0ee71bbb5c64518c
+PKG_SOURCE_DATE:=20210914
+PKG_MIRROR_HASH:=911af2c49c28596256c31ebb26b48c5ba9e6a0abdd46830e75e2cf4c0eff4256
 
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE
@@ -29,7 +29,7 @@ CWD_SYSTEM:=openwrt
 CWD_BUILD_VERSION?=$(PKG_SOURCE_VERSION)
 CWD_BUILD_GOVERSION:=$(shell go version | cut -d " " -f3 | sed -E 's/[go]+//g')
 CWD_BUILD_CODENAME:=alphaga
-CWD_BUILD_TIMESTAMP:=$(shell date +%F"_"%T)
+CWD_BUILD_TIMESTAMP:=$(SOURCE_DATE_EPOCH)
 CWD_BUILD_TAG:=openwrt
 
 CWD_VERSION_PKG:=github.com/crowdsecurity/crowdsec/pkg/cwversion
@@ -52,7 +52,7 @@ include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
 define Package/crowdsec/Default
   SECTION:=net
   CATEGORY:=Network
-  TITLE:=CrowdSec detection engine
+  TITLE:=Crowdsec detection engine
   URL:=https://crowdsec.net/
 endef
 
@@ -72,8 +72,8 @@ endef
 define Package/crowdsec/Default/description
   Crowdsec - An open-source, lightweight agent to detect
   and respond to bad behaviours.
-  It also automatically benefits from our global
-  community-wide IP reputation database
+  It also automatically benefits from a global
+  community-wide IP reputation database.
 endef
 
 define Package/crowdsec/description
@@ -148,9 +148,7 @@ define Package/crowdsec/install
 endef
 
 define Package/crowdsec/conffiles
-/etc/crowdsec/config.yaml
-/etc/crowdsec/local_api_credentials.yaml
-/etc/crowdsec/online_api_credentials.yaml
+/etc/crowdsec/
 /etc/config/crowdsec
 endef
 

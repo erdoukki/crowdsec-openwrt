@@ -16,44 +16,39 @@ service_triggers() {
 }
 
 init_config() {
-	config_load crowdsec
-	config_get BACKEND crowdsec backend "${BACKEND}"
-
-	if [ "$BACKEND" = "auto" ]; then 
-		## CheckFirewall
-		iptables="true"
-		which iptables > /dev/null
-		FW_BACKEND=""
-		if [[ $? != 0 ]]; then
-		  echo "iptables is not present"
-		  iptables="false"
-		else
-		  FW_BACKEND="iptables"
-		  echo "iptables found"
-		fi
-
-		nftables="true"
-		which nft > /dev/null
-		if [[ $? != 0 ]]; then
-		  echo "nftables is not present"
-		  nftables="false"
-		else
-		  FW_BACKEND="nftables"
-		  echo "nftables found"
-		fi
-
-		if [ "$nftables" = "true" -a "$iptables" = "true" ]; then
-		  echo "Found nftables(default) and iptables..."
-		fi
-
-		if [ "$FW_BACKEND" = "iptables" ]; then
-		  which ipset > /dev/null
-		  if [[ $? != 0 ]]; then
-		    echo "ipset not found, install it !"
-		  fi
-		fi
-		BACKEND=$FW_BACKEND
+	## CheckFirewall
+	iptables="true"
+	which iptables > /dev/null
+	FW_BACKEND=""
+	if [[ $? != 0 ]]; then
+	  echo "iptables is not present"
+	  iptables="false"
+	else
+	  FW_BACKEND="iptables"
+	  echo "iptables found"
 	fi
+
+	nftables="true"
+	which nft > /dev/null
+	if [[ $? != 0 ]]; then
+	  echo "nftables is not present"
+	  nftables="false"
+	else
+	  FW_BACKEND="nftables"
+	  echo "nftables found"
+	fi
+
+	if [ "$nftables" = "true" -a "$iptables" = "true" ]; then
+	  echo "Found nftables(default) and iptables..."
+	fi
+
+	if [ "$FW_BACKEND" = "iptables" ]; then
+	  which ipset > /dev/null
+	  if [[ $? != 0 ]]; then
+	    echo "ipset not found, install it !"
+	  fi
+	fi
+	BACKEND=$FW_BACKEND
 
 	# Create tmp dir & permissions if needed
 	if [ ! -d "${VARCONFIGDIR}" ]; then
