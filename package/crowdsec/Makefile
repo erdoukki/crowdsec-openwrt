@@ -1,8 +1,6 @@
+# SPDX-License-Identifier: MIT
 #
 # Copyright (C) 2021 Gerald Kerma
-#
-# This is free software, licensed under the GNU General Public License v2.
-# See /LICENSE for more information.
 #
 
 include $(TOPDIR)/rules.mk
@@ -154,7 +152,3 @@ endef
 
 $(eval $(call GoBinPackage,crowdsec))
 $(eval $(call BuildPackage,crowdsec))
-
-$(eval $(call GoSrcPackage,golang-crowdsec-dev))
-$(eval $(call BuildPackage,golang-crowdsec-dev))
-
